@@ -1,0 +1,103 @@
+{
+  "libros": [
+    {
+      "id": "libro-001",
+      "titulo": "Cien años de soledad",
+      "autor": "Gabriel García Márquez",
+      "isbn": "978-0307474728",
+      "categoria": "Literatura",
+      "cantidadTotal": 3,
+      "cantidadDisponible": 3,
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-05-24T04:37:15.677Z"
+    },
+    {
+      "id": "libro-002",
+      "titulo": "El principito",
+      "autor": "Antoine de Saint-Exupéry",
+      "isbn": "978-0156012195",
+      "categoria": "Infantil",
+      "cantidadTotal": 5,
+      "cantidadDisponible": 4,
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-05-23T23:48:24.998Z"
+    },
+    {
+      "id": "libro-003",
+      "titulo": "Historia de Colombia",
+      "autor": "Jorge Orlando Melo",
+      "isbn": "978-9586982222",
+      "categoria": "Historia",
+      "cantidadTotal": 2,
+      "cantidadDisponible": 1,
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-01-15T10:00:00.000Z"
+    }
+  ],
+  "usuarios": [
+    {
+      "id": "usuario-001",
+      "nombre": "María Fernanda López",
+      "documento": "1098765432",
+      "email": "maria.lopez@email.com",
+      "telefono": "3001234567",
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-01-15T10:00:00.000Z"
+    },
+    {
+      "id": "usuario-002",
+      "nombre": "Carlos Andrés Ruiz",
+      "documento": "1087654321",
+      "email": "carlos.ruiz@email.com",
+      "telefono": "3109876543",
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-01-15T10:00:00.000Z"
+    }
+  ],
+  "prestamos": [
+    {
+      "id": "prestamo-001",
+      "libroId": "libro-001",
+      "usuarioId": "usuario-001",
+      "fechaPrestamo": "2026-05-01T14:00:00.000Z",
+      "fechaDevolucionEsperada": "2026-05-15T14:00:00.000Z",
+      "fechaDevolucionReal": "2026-05-23T23:47:57.151Z",
+      "estado": "devuelto",
+      "createdAt": "2026-05-01T14:00:00.000Z",
+      "updatedAt": "2026-05-23T23:47:57.151Z"
+    },
+    {
+      "id": "prestamo-002",
+      "libroId": "libro-003",
+      "usuarioId": "usuario-002",
+      "fechaPrestamo": "2026-05-10T09:00:00.000Z",
+      "fechaDevolucionEsperada": "2026-05-24T09:00:00.000Z",
+      "fechaDevolucionReal": null,
+      "estado": "activo",
+      "createdAt": "2026-05-10T09:00:00.000Z",
+      "updatedAt": "2026-05-10T09:00:00.000Z"
+    },
+    {
+      "id": "fa5c765a-eb95-443e-80d7-c1b21eb97d20",
+      "libroId": "libro-002",
+      "usuarioId": "usuario-001",
+      "fechaPrestamo": "2026-05-23T23:48:24.998Z",
+      "fechaDevolucionEsperada": "2026-05-25T23:48:24.998Z",
+      "fechaDevolucionReal": null,
+      "estado": "activo",
+      "createdAt": "2026-05-23T23:48:24.998Z",
+      "updatedAt": "2026-05-23T23:48:24.998Z"
+    },
+    {
+      "id": "d32f56b1-25ee-49e3-b4be-bdb026f2b991",
+      "libroId": "libro-001",
+      "usuarioId": "usuario-001",
+      "fechaPrestamo": "2026-05-24T04:35:57.868Z",
+      "fechaDevolucionEsperada": "2026-06-07T04:35:57.868Z",
+      "fechaDevolucionReal": "2026-05-24T04:37:15.677Z",
+      "estado": "devuelto",
+      "createdAt": "2026-05-24T04:35:57.868Z",
+      "updatedAt": "2026-05-24T04:37:15.677Z"
+    }
+  ]
+}
