@@ -1,100 +1,134 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { readDb, writeDb } from '../db.js';
+import pool, { asyncHandler, mapPrestamoEnriquecido } from '../db.js';
 
 const router = Router();
 
-function enriquecerPrestamo(prestamo, db) {
-  const libro = db.libros.find((l) => l.id === prestamo.libroId);
-  const usuario = db.usuarios.find((u) => u.id === prestamo.usuarioId);
-  return {
-    ...prestamo,
-    libroTitulo: libro?.titulo || 'Libro eliminado',
-    libroAutor: libro?.autor || '',
-    usuarioNombre: usuario?.nombre || 'Usuario eliminado',
-    usuarioDocumento: usuario?.documento || ''
-  };
-}
+const PRESTAMO_SELECT = `
+  SELECT p.*,
+    l.titulo AS libro_titulo,
+    l.autor AS libro_autor,
+    u.nombre AS usuario_nombre,
+    u.documento AS usuario_documento
+  FROM prestamos p
+  LEFT JOIN libros l ON l.id = p.libro_id
+  LEFT JOIN usuarios u ON u.id = p.usuario_id
+`;
 
-router.get('/', (req, res) => {
-  const db = readDb();
-  let prestamos = db.prestamos.map((p) => enriquecerPrestamo(p, db));
+router.get('/', asyncHandler(async (req, res) => {
+  let sql = PRESTAMO_SELECT;
+  const params = [];
 
   if (req.query.estado) {
-    prestamos = prestamos.filter((p) => p.estado === req.query.estado);
+    sql += ' WHERE p.estado = ?';
+    params.push(req.query.estado);
   }
 
-  prestamos.sort((a, b) => new Date(b.fechaPrestamo) - new Date(a.fechaPrestamo));
-  res.json(prestamos);
-});
+  sql += ' ORDER BY p.fecha_prestamo DESC';
 
-router.post('/', (req, res) => {
+  const [rows] = await pool.query(sql, params);
+  res.json(rows.map(mapPrestamoEnriquecido));
+}));
+
+router.post('/', asyncHandler(async (req, res) => {
   const { libroId, usuarioId, diasPrestamo = 14 } = req.body;
   if (!libroId || !usuarioId) {
     return res.status(400).json({ error: 'Libro y usuario son obligatorios' });
   }
 
-  const db = readDb();
-  const libro = db.libros.find((l) => l.id === libroId);
-  const usuario = db.usuarios.find((u) => u.id === usuarioId);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (!libro) return res.status(404).json({ error: 'Libro no encontrado' });
-  if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
-  if (libro.cantidadDisponible < 1) {
-    return res.status(400).json({ error: 'No hay ejemplares disponibles de este libro' });
+    const [libros] = await connection.query('SELECT * FROM libros WHERE id = ? FOR UPDATE', [libroId]);
+    const [usuarios] = await connection.query('SELECT id FROM usuarios WHERE id = ?', [usuarioId]);
+
+    if (!libros.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Libro no encontrado' });
+    }
+    if (!usuarios.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const libro = libros[0];
+    if (libro.cantidad_disponible < 1) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'No hay ejemplares disponibles de este libro' });
+    }
+
+    const now = new Date();
+    const fechaDevolucionEsperada = new Date(now);
+    fechaDevolucionEsperada.setDate(fechaDevolucionEsperada.getDate() + Number(diasPrestamo));
+    const id = uuidv4();
+
+    await connection.query(
+      `INSERT INTO prestamos (id, libro_id, usuario_id, fecha_prestamo, fecha_devolucion_esperada,
+       fecha_devolucion_real, estado, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, 'activo', ?, ?)`,
+      [id, libroId, usuarioId, now, fechaDevolucionEsperada, now, now]
+    );
+
+    await connection.query(
+      'UPDATE libros SET cantidad_disponible = cantidad_disponible - 1, updated_at = ? WHERE id = ?',
+      [now, libroId]
+    );
+
+    await connection.commit();
+
+    const [rows] = await pool.query(`${PRESTAMO_SELECT} WHERE p.id = ?`, [id]);
+    res.status(201).json(mapPrestamoEnriquecido(rows[0]));
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
   }
+}));
 
-  const now = new Date();
-  const fechaDevolucionEsperada = new Date(now);
-  fechaDevolucionEsperada.setDate(fechaDevolucionEsperada.getDate() + Number(diasPrestamo));
+router.put('/:id/devolver', asyncHandler(async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  const prestamo = {
-    id: uuidv4(),
-    libroId,
-    usuarioId,
-    fechaPrestamo: now.toISOString(),
-    fechaDevolucionEsperada: fechaDevolucionEsperada.toISOString(),
-    fechaDevolucionReal: null,
-    estado: 'activo',
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString()
-  };
+    const [prestamos] = await connection.query(
+      'SELECT * FROM prestamos WHERE id = ? FOR UPDATE',
+      [req.params.id]
+    );
+    if (!prestamos.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Préstamo no encontrado' });
+    }
 
-  libro.cantidadDisponible -= 1;
-  libro.updatedAt = now.toISOString();
+    const prestamo = prestamos[0];
+    if (prestamo.estado === 'devuelto') {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Este préstamo ya fue devuelto' });
+    }
 
-  db.prestamos.push(prestamo);
-  writeDb(db);
+    const now = new Date();
 
-  res.status(201).json(enriquecerPrestamo(prestamo, db));
-});
+    await connection.query(
+      `UPDATE prestamos SET estado = 'devuelto', fecha_devolucion_real = ?, updated_at = ? WHERE id = ?`,
+      [now, now, req.params.id]
+    );
 
-router.put('/:id/devolver', (req, res) => {
-  const db = readDb();
-  const index = db.prestamos.findIndex((p) => p.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: 'Préstamo no encontrado' });
+    await connection.query(
+      'UPDATE libros SET cantidad_disponible = cantidad_disponible + 1, updated_at = ? WHERE id = ?',
+      [now, prestamo.libro_id]
+    );
 
-  const prestamo = db.prestamos[index];
-  if (prestamo.estado === 'devuelto') {
-    return res.status(400).json({ error: 'Este préstamo ya fue devuelto' });
+    await connection.commit();
+
+    const [rows] = await pool.query(`${PRESTAMO_SELECT} WHERE p.id = ?`, [req.params.id]);
+    res.json(mapPrestamoEnriquecido(rows[0]));
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
   }
-
-  const libro = db.libros.find((l) => l.id === prestamo.libroId);
-  if (libro) {
-    libro.cantidadDisponible += 1;
-    libro.updatedAt = new Date().toISOString();
-  }
-
-  const now = new Date().toISOString();
-  db.prestamos[index] = {
-    ...prestamo,
-    estado: 'devuelto',
-    fechaDevolucionReal: now,
-    updatedAt: now
-  };
-
-  writeDb(db);
-  res.json(enriquecerPrestamo(db.prestamos[index], db));
-});
+}));
 
 export default router;

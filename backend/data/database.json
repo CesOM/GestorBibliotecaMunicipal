@@ -1,17 +1,6 @@
 {
   "libros": [
     {
-      "id": "libro-001",
-      "titulo": "Cien años de soledad",
-      "autor": "Gabriel García Márquez",
-      "isbn": "978-0307474728",
-      "categoria": "Literatura",
-      "cantidadTotal": 3,
-      "cantidadDisponible": 3,
-      "createdAt": "2026-01-15T10:00:00.000Z",
-      "updatedAt": "2026-05-24T04:37:15.677Z"
-    },
-    {
       "id": "libro-002",
       "titulo": "El principito",
       "autor": "Antoine de Saint-Exupéry",
@@ -20,7 +9,7 @@
       "cantidadTotal": 5,
       "cantidadDisponible": 4,
       "createdAt": "2026-01-15T10:00:00.000Z",
-      "updatedAt": "2026-05-23T23:48:24.998Z"
+      "updatedAt": "2026-05-24T15:47:21.824Z"
     },
     {
       "id": "libro-003",
@@ -32,6 +21,17 @@
       "cantidadDisponible": 1,
       "createdAt": "2026-01-15T10:00:00.000Z",
       "updatedAt": "2026-01-15T10:00:00.000Z"
+    },
+    {
+      "id": "d2bd5e16-f0d2-4781-b68e-bbbfe441ed3b",
+      "titulo": "Don Quijote de la Mancha",
+      "autor": "Miguel de Cervantes",
+      "isbn": "978-8497941115",
+      "categoria": "Literatura",
+      "cantidadTotal": 2,
+      "cantidadDisponible": 2,
+      "createdAt": "2026-05-24T15:16:04.309Z",
+      "updatedAt": "2026-05-24T15:16:04.309Z"
     }
   ],
   "usuarios": [
@@ -98,6 +98,17 @@
       "estado": "devuelto",
       "createdAt": "2026-05-24T04:35:57.868Z",
       "updatedAt": "2026-05-24T04:37:15.677Z"
+    },
+    {
+      "id": "0f3511c4-ea66-4be8-95dd-32662483be49",
+      "libroId": "libro-002",
+      "usuarioId": "usuario-001",
+      "fechaPrestamo": "2026-05-24T15:46:33.124Z",
+      "fechaDevolucionEsperada": "2026-06-07T15:46:33.124Z",
+      "fechaDevolucionReal": "2026-05-24T15:47:21.824Z",
+      "estado": "devuelto",
+      "createdAt": "2026-05-24T15:46:33.124Z",
+      "updatedAt": "2026-05-24T15:47:21.824Z"
     }
   ]
 }

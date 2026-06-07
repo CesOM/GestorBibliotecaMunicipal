@@ -1,27 +1,37 @@
 import { Router } from 'express';
-import { readDb } from '../db.js';
+import pool, { asyncHandler } from '../db.js';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
-  const db = readDb();
-  const prestamosActivos = db.prestamos.filter((p) => p.estado === 'activo');
-  const prestamosVencidos = prestamosActivos.filter(
-    (p) => new Date(p.fechaDevolucionEsperada) < new Date()
+router.get('/', asyncHandler(async (_req, res) => {
+  const [[librosStats]] = await pool.query(
+    `SELECT COUNT(*) AS total_libros,
+            COALESCE(SUM(cantidad_total), 0) AS total_ejemplares,
+            COALESCE(SUM(cantidad_disponible), 0) AS ejemplares_disponibles
+     FROM libros`
   );
 
-  const totalEjemplares = db.libros.reduce((sum, l) => sum + l.cantidadTotal, 0);
-  const disponibles = db.libros.reduce((sum, l) => sum + l.cantidadDisponible, 0);
+  const [[usuariosStats]] = await pool.query('SELECT COUNT(*) AS total_usuarios FROM usuarios');
+
+  const [[prestamosStats]] = await pool.query(
+    `SELECT
+       SUM(estado = 'activo') AS prestamos_activos,
+       SUM(estado = 'activo' AND fecha_devolucion_esperada < NOW()) AS prestamos_vencidos
+     FROM prestamos`
+  );
+
+  const totalEjemplares = Number(librosStats.total_ejemplares);
+  const disponibles = Number(librosStats.ejemplares_disponibles);
 
   res.json({
-    totalLibros: db.libros.length,
-    totalUsuarios: db.usuarios.length,
+    totalLibros: Number(librosStats.total_libros),
+    totalUsuarios: Number(usuariosStats.total_usuarios),
     totalEjemplares,
     ejemplaresDisponibles: disponibles,
     ejemplaresPrestados: totalEjemplares - disponibles,
-    prestamosActivos: prestamosActivos.length,
-    prestamosVencidos: prestamosVencidos.length
+    prestamosActivos: Number(prestamosStats.prestamos_activos) || 0,
+    prestamosVencidos: Number(prestamosStats.prestamos_vencidos) || 0
   });
-});
+}));
 
 export default router;

@@ -1,58 +1,52 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { readDb, writeDb } from '../db.js';
+import pool, { asyncHandler, mapLibro } from '../db.js';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
-  const db = readDb();
-  res.json(db.libros);
-});
+router.get('/', asyncHandler(async (_req, res) => {
+  const [rows] = await pool.query('SELECT * FROM libros ORDER BY titulo');
+  res.json(rows.map(mapLibro));
+}));
 
-router.get('/:id', (req, res) => {
-  const db = readDb();
-  const libro = db.libros.find((l) => l.id === req.params.id);
-  if (!libro) return res.status(404).json({ error: 'Libro no encontrado' });
-  res.json(libro);
-});
+router.get('/:id', asyncHandler(async (req, res) => {
+  const [rows] = await pool.query('SELECT * FROM libros WHERE id = ?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Libro no encontrado' });
+  res.json(mapLibro(rows[0]));
+}));
 
-router.post('/', (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { titulo, autor, isbn, categoria, cantidad = 1 } = req.body;
   if (!titulo || !autor) {
     return res.status(400).json({ error: 'Título y autor son obligatorios' });
   }
 
-  const now = new Date().toISOString();
-  const libro = {
-    id: uuidv4(),
-    titulo,
-    autor,
-    isbn: isbn || '',
-    categoria: categoria || 'General',
-    cantidadTotal: Number(cantidad) || 1,
-    cantidadDisponible: Number(cantidad) || 1,
-    createdAt: now,
-    updatedAt: now
-  };
+  const now = new Date();
+  const id = uuidv4();
+  const cantidadNum = Number(cantidad) || 1;
 
-  const db = readDb();
-  db.libros.push(libro);
-  writeDb(db);
-  res.status(201).json(libro);
-});
+  await pool.query(
+    `INSERT INTO libros (id, titulo, autor, isbn, categoria, cantidad_total, cantidad_disponible, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, titulo, autor, isbn || '', categoria || 'General', cantidadNum, cantidadNum, now, now]
+  );
 
-router.put('/:id', (req, res) => {
-  const db = readDb();
-  const index = db.libros.findIndex((l) => l.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: 'Libro no encontrado' });
+  const [rows] = await pool.query('SELECT * FROM libros WHERE id = ?', [id]);
+  res.status(201).json(mapLibro(rows[0]));
+}));
 
-  const prestados = db.prestamos.filter(
-    (p) => p.libroId === req.params.id && p.estado === 'activo'
-  ).length;
+router.put('/:id', asyncHandler(async (req, res) => {
+  const [libros] = await pool.query('SELECT * FROM libros WHERE id = ?', [req.params.id]);
+  if (!libros.length) return res.status(404).json({ error: 'Libro no encontrado' });
 
-  const libro = db.libros[index];
-  const nuevaCantidad = req.body.cantidadTotal ?? libro.cantidadTotal;
+  const libro = libros[0];
+  const [prestadosRows] = await pool.query(
+    `SELECT COUNT(*) AS total FROM prestamos WHERE libro_id = ? AND estado = 'activo'`,
+    [req.params.id]
+  );
+  const prestados = prestadosRows[0].total;
 
+  const nuevaCantidad = req.body.cantidadTotal ?? libro.cantidad_total;
   if (nuevaCantidad < prestados) {
     return res.status(400).json({
       error: `No puede reducir el inventario por debajo de ${prestados} ejemplares prestados`
@@ -60,37 +54,41 @@ router.put('/:id', (req, res) => {
   }
 
   const disponible = nuevaCantidad - prestados;
+  const now = new Date();
 
-  db.libros[index] = {
-    ...libro,
-    titulo: req.body.titulo ?? libro.titulo,
-    autor: req.body.autor ?? libro.autor,
-    isbn: req.body.isbn ?? libro.isbn,
-    categoria: req.body.categoria ?? libro.categoria,
-    cantidadTotal: nuevaCantidad,
-    cantidadDisponible: disponible,
-    updatedAt: new Date().toISOString()
-  };
-
-  writeDb(db);
-  res.json(db.libros[index]);
-});
-
-router.delete('/:id', (req, res) => {
-  const db = readDb();
-  const prestamoActivo = db.prestamos.some(
-    (p) => p.libroId === req.params.id && p.estado === 'activo'
+  await pool.query(
+    `UPDATE libros SET titulo = ?, autor = ?, isbn = ?, categoria = ?,
+     cantidad_total = ?, cantidad_disponible = ?, updated_at = ?
+     WHERE id = ?`,
+    [
+      req.body.titulo ?? libro.titulo,
+      req.body.autor ?? libro.autor,
+      req.body.isbn ?? libro.isbn,
+      req.body.categoria ?? libro.categoria,
+      nuevaCantidad,
+      disponible,
+      now,
+      req.params.id
+    ]
   );
-  if (prestamoActivo) {
+
+  const [rows] = await pool.query('SELECT * FROM libros WHERE id = ?', [req.params.id]);
+  res.json(mapLibro(rows[0]));
+}));
+
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const [activos] = await pool.query(
+    `SELECT id FROM prestamos WHERE libro_id = ? AND estado = 'activo' LIMIT 1`,
+    [req.params.id]
+  );
+  if (activos.length) {
     return res.status(400).json({ error: 'No se puede eliminar un libro con préstamos activos' });
   }
 
-  const index = db.libros.findIndex((l) => l.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: 'Libro no encontrado' });
+  const [result] = await pool.query('DELETE FROM libros WHERE id = ?', [req.params.id]);
+  if (result.affectedRows === 0) return res.status(404).json({ error: 'Libro no encontrado' });
 
-  db.libros.splice(index, 1);
-  writeDb(db);
   res.status(204).send();
-});
+}));
 
 export default router;
