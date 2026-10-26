@@ -61,16 +61,16 @@ export default function Dashboard() {
       <div className="card">
         <h3 style={{ marginBottom: '1rem' }}>Accesos rápidos</h3>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <Link to="/libros" className="btn btn-primary">
+          <Link to="/admin/libros" className="btn btn-primary">
             Gestionar libros
           </Link>
-          <Link to="/usuarios" className="btn btn-primary">
+          <Link to="/admin/usuarios" className="btn btn-primary">
             Gestionar usuarios
           </Link>
-          <Link to="/prestamos" className="btn btn-primary">
+          <Link to="/admin/prestamos" className="btn btn-primary">
             Registrar préstamo
           </Link>
-          <Link to="/buscar" className="btn btn-secondary">
+          <Link to="/admin/buscar" className="btn btn-secondary">
             Buscar
           </Link>
         </div>
@@ -78,3 +78,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
