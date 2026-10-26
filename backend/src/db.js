@@ -11,7 +11,7 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'biblioteca_municipal',
   waitForConnections: true,
   connectionLimit: 10,
-  dateStrings: false
+  dateStrings: false,
 });
 
 export function toIso(value) {
@@ -27,10 +27,16 @@ export function mapLibro(row) {
     autor: row.autor,
     isbn: row.isbn,
     categoria: row.categoria,
+    descripcion: row.descripcion || '',
+    portadaUrl: row.portada_url || '',
+    pdfUrl: row.pdf_url || '',
+    flipbookUrl: row.flipbook_url || '',
+    formato: row.formato || 'pdf',
+    publicado: Boolean(row.publicado),
     cantidadTotal: row.cantidad_total,
     cantidadDisponible: row.cantidad_disponible,
     createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at)
+    updatedAt: toIso(row.updated_at),
   };
 }
 
@@ -43,7 +49,7 @@ export function mapUsuario(row) {
     email: row.email,
     telefono: row.telefono,
     createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at)
+    updatedAt: toIso(row.updated_at),
   };
 }
 
@@ -58,7 +64,7 @@ export function mapPrestamo(row) {
     fechaDevolucionReal: toIso(row.fecha_devolucion_real),
     estado: row.estado,
     createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at)
+    updatedAt: toIso(row.updated_at),
   };
 }
 
@@ -68,7 +74,7 @@ export function mapPrestamoEnriquecido(row) {
     libroTitulo: row.libro_titulo || 'Libro eliminado',
     libroAutor: row.libro_autor || '',
     usuarioNombre: row.usuario_nombre || 'Usuario eliminado',
-    usuarioDocumento: row.usuario_documento || ''
+    usuarioDocumento: row.usuario_documento || '',
   };
 }
 
@@ -118,16 +124,17 @@ CREATE TABLE IF NOT EXISTS prestamos (
 
 async function ensureDatabase() {
   const dbName = process.env.DB_NAME || 'biblioteca_municipal';
+  if (!/^[a-zA-Z0-9_]+$/.test(dbName)) throw new Error('DB_NAME no válido');
   const bootstrap = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || ''
+    password: process.env.DB_PASSWORD || '',
   });
 
   try {
     await bootstrap.query(
-      `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+      `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
     );
   } finally {
     await bootstrap.end();
@@ -139,9 +146,26 @@ export async function initDb() {
 
   const connection = await pool.getConnection();
   try {
-    const statements = SCHEMA.split(';').map((s) => s.trim()).filter(Boolean);
+    const statements = SCHEMA.split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
     for (const statement of statements) {
       await connection.query(statement);
+    }
+    // Additive, repeatable migration: preserve existing books and loans.
+    const additions = {
+      descripcion: 'TEXT NULL',
+      portada_url: "VARCHAR(2048) NOT NULL DEFAULT ''",
+      pdf_url: "VARCHAR(2048) NOT NULL DEFAULT ''",
+      flipbook_url: "VARCHAR(2048) NOT NULL DEFAULT ''",
+      formato: "ENUM('pdf','flipbook','ambos') NOT NULL DEFAULT 'pdf'",
+      publicado: 'TINYINT(1) NOT NULL DEFAULT 0',
+    };
+    const [columns] = await connection.query('SHOW COLUMNS FROM libros');
+    for (const [name, definition] of Object.entries(additions)) {
+      if (!columns.some((c) => c.Field === name)) {
+        await connection.query(`ALTER TABLE libros ADD COLUMN ${name} ${definition}`);
+      }
     }
   } finally {
     connection.release();

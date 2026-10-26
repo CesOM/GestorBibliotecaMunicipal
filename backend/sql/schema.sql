@@ -10,6 +10,12 @@ CREATE TABLE IF NOT EXISTS libros (
   autor VARCHAR(255) NOT NULL,
   isbn VARCHAR(50) DEFAULT '',
   categoria VARCHAR(100) DEFAULT 'General',
+  descripcion TEXT NULL,
+  portada_url VARCHAR(2048) NOT NULL DEFAULT '',
+  pdf_url VARCHAR(2048) NOT NULL DEFAULT '',
+  flipbook_url VARCHAR(2048) NOT NULL DEFAULT '',
+  formato ENUM('pdf','flipbook','ambos') NOT NULL DEFAULT 'pdf',
+  publicado TINYINT(1) NOT NULL DEFAULT 0,
   cantidad_total INT NOT NULL DEFAULT 1,
   cantidad_disponible INT NOT NULL DEFAULT 1,
   created_at DATETIME(3) NOT NULL,
@@ -39,3 +45,4 @@ CREATE TABLE IF NOT EXISTS prestamos (
   FOREIGN KEY (libro_id) REFERENCES libros(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
+
